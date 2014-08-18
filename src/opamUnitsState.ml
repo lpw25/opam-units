@@ -57,7 +57,7 @@ let read_state file =
       really_input ic buffer 0 magic_len;
       if buffer <> magic_no then begin
         close_in ic;
-        let pre_magic_len = magic_len - 2 in
+        let pre_magic_len = magic_len - 3 in
         let pre_magic_no = String.sub magic_no 0 pre_magic_len in
         let pre_buffer = String.sub buffer 0 pre_magic_len in
         let msg =
