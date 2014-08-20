@@ -25,26 +25,6 @@ type state =
       (OpamUnit.Name.t * OpamUnit.Digest.t) list OpamUnit.Map.t;
     library_directory: OpamFilename.Dir.t OpamLibrary.Map.t; }
 
-let empty_state =
-  { timestamp = 0.0;
-    package_timestamp = OpamPackage.Map.empty;
-    units = OpamUnit.Set.empty;
-    unit_file = OpamUnit.Map.empty;
-    unit_imports = OpamUnit.Map.empty;
-    library_directory = OpamLibrary.Map.empty; }
-
-(* Union states for disjoint sets of units *)
-let union_state s r =
-  let err _ _ = raise (Invalid_argument "union_state") in
-    { timestamp = max s.timestamp r.timestamp;
-      package_timestamp =
-        OpamPackage.Map.union err s.package_timestamp r.package_timestamp;
-      units = OpamUnit.Set.union s.units r.units;
-      unit_file = OpamUnit.Map.union err s.unit_file r.unit_file;
-      unit_imports = OpamUnit.Map.union err s.unit_imports r.unit_imports;
-      library_directory =
-        OpamLibrary.Map.union err s.library_directory r.library_directory; }
-
 let read_state file =
   if not (OpamFilename.exists file) then None
   else
@@ -117,8 +97,8 @@ let warn_cmi_error file = function
         "Compiled interface %s is corrupted."
         (OpamFilename.prettify file)
 
-(* Read the compilation unit in a given cmi file *)
-let read_cmi lib file =
+(* Add the compilation unit in a given cmi file *)
+let add_cmi lib s file =
   try
     let cmi_info = Cmi_format.read_cmi (OpamFilename.to_string file) in
       match cmi_info.Cmi_format.cmi_crcs with
@@ -126,79 +106,73 @@ let read_cmi lib file =
           let name, digest = convert_name_digest nd in
           let imports = List.map convert_name_digest imports in
           let unit = OpamUnit.create lib name digest in
-            { empty_state with
-                units = OpamUnit.Set.singleton unit;
-                unit_file = OpamUnit.Map.singleton unit file;
-                unit_imports = OpamUnit.Map.singleton unit imports; }
+            { s with units = OpamUnit.Set.add unit s.units;
+                     unit_file = OpamUnit.Map.add unit file s.unit_file;
+                     unit_imports =
+                       OpamUnit.Map.add unit imports s.unit_imports; }
       | _ ->
           OpamGlobals.warning
             "Compiled interface %s is corrupted."
             (OpamFilename.prettify file);
-          empty_state
+          s
   with Cmi_format.Error err ->
     warn_cmi_error file err;
-    empty_state
+    s
 
-(* Read the compilation units in a given directory. *)
-let read_directory lib dir =
+(* Add the compilation units in a given directory. *)
+let add_directory lib s dir =
   if not (OpamFilename.exists_dir dir) then begin
     OpamGlobals.warning "Library directory %s is missing." (OpamFilename.prettify_dir dir);
-    empty_state
+    s
   end else begin
     let files = OpamFilename.files dir in
     let cmis =
       List.filter (fun n -> OpamFilename.check_suffix n ".cmi") files
     in
-      List.fold_left
-        (fun s cmi -> union_state s (read_cmi lib cmi))
-        empty_state cmis
+      List.fold_left (add_cmi lib) s cmis
   end
 
-(* Read the compilation units in a given library. *)
-let read_library lib =
+(* Add the compilation units in a given library. *)
+let add_library s lib =
   let name = OpamLibrary.Name.to_string (OpamLibrary.name lib) in
   try
     let dir = OpamFilename.Dir.of_string (Findlib.package_directory name) in
-    let s = read_directory lib dir in
-    let r =
-      { empty_state with
-          library_directory = OpamLibrary.Map.singleton lib dir; }
-    in
-      union_state s r
+    let s = add_directory lib s dir in
+      { s with library_directory =
+                 OpamLibrary.Map.add lib dir s.library_directory }
   with Findlib.No_such_package _ ->
     OpamGlobals.warning "Library %s is not installed." name;
-    empty_state
+    s
 
 let install_time t pkg =
   let file = OpamPath.Switch.install t.root t.switch (OpamPackage.name pkg) in
   let stats = Unix.stat (OpamFilename.to_string file) in
     stats.Unix.st_mtime
 
-(* Read the compilation units in a given package. *)
-let read_package t pkg =
+(* Add the compilation units in a given package. *)
+let add_package t pkg s =
   let opam = OpamState.opam t pkg in
-  let libs =
+  let lib_names =
     OpamMisc.filter_map
       (fun (s,filter) ->
         if OpamState.eval_filter t ~opam OpamVariable.Map.empty filter
         then Some s else None)
       (OpamFile.OPAM.libraries opam)
   in
-  let timestamp = install_time t pkg in
-  let r =
-      { empty_state with
-          timestamp;
-          package_timestamp = OpamPackage.Map.singleton pkg timestamp; }
-  in
-    List.fold_left
-      (fun s name ->
+  let libs =
+    List.map
+      (fun name ->
          let name = OpamLibrary.Name.of_string name in
-         let lib = OpamLibrary.create pkg name in
-           union_state s (read_library lib))
-      r libs
-
-let add_package t pkg s =
-  union_state s (read_package t pkg)
+           OpamLibrary.create pkg name)
+      lib_names
+  in
+  let timestamp = install_time t pkg in
+  let s =
+      { s with timestamp = timestamp;
+               package_timestamp =
+                 OpamPackage.Map.add pkg timestamp s.package_timestamp; }
+  in
+    List.fold_left add_library s libs
 
 let remove_package t pkg s =
   let check_pkg pkg' = OpamPackage.equal pkg pkg' in
@@ -219,7 +193,15 @@ let init_state t file =
   OpamGlobals.msg
     "Creating a cache of units metadata in %s ...\n"
     (OpamFilename.prettify file);
-  let s = OpamPackage.Set.fold (add_package t) t.installed empty_state in
+  let s =
+    { timestamp = 0.0;
+      package_timestamp = OpamPackage.Map.empty;
+      units = OpamUnit.Set.empty;
+      unit_file = OpamUnit.Map.empty;
+      unit_imports = OpamUnit.Map.empty;
+      library_directory = OpamLibrary.Map.empty; }
+  in
+  let s = OpamPackage.Set.fold (add_package t) t.installed s in
     write_state file s;
     s
 
