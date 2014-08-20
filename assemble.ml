@@ -23,14 +23,12 @@ let bin_pkgs = [pkg "cmdliner"]
 (* Compilation units *)
 let opamUnitsConfig  = unit "opamUnitsConfig" (`Path ["src"])
 let opamLibrary = unit "opamLibrary" (`Path ["src"])
-let opamUnit = unit ~deps:[opamLibrary] "opamUnit" (`Path ["src"])
-let opamUnitsState =
-  unit ~deps:[opamUnitsConfig; opamLibrary; opamUnit;]
-       "opamUnitsState" (`Path ["src"])
+let opamUnit = unit "opamUnit" (`Path ["src"])
+let opamUnitsState = unit "opamUnitsState" (`Path ["src"])
 let main = unit "main" (`Path ["src"])
 
 (* Binary and library *)
 let l = lib ~deps:lib_pkgs "opam-units" (`Units [opamLibrary; opamUnit; opamUnitsConfig; opamUnitsState])
-let b = bin ~deps:[l] "opam-units" (`Units [main])
+let b = bin ~deps:(l :: bin_pkgs) "opam-units" (`Units [main])
 
 let () = assemble (project "opam-units" [b;l])
