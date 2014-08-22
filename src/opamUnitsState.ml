@@ -77,10 +77,20 @@ let write_state file s =
       close_out oc;
       raise exn
 
-(* Convert a string and digest into a unit name and unit digest *)
-let convert_name_digest (name, digest) =
-  (OpamUnit.Name.of_string name,
-     OpamUnit.Digest.create digest)
+let convert_name name =
+  OpamUnit.Name.of_string name
+
+let convert_digest digest =
+  OpamUnit.Digest.create digest
+
+let convert_imports l =
+  List.fold_right
+    (fun hd tl ->
+       match hd with
+       | name, Some digest ->
+           (convert_name name, convert_digest digest) :: tl
+       | _, None -> tl)
+    l []
 
 let warn_cmi_error file = function
   | Cmi_format.Not_an_interface _ ->
@@ -102,9 +112,11 @@ let add_cmi lib s file =
   try
     let cmi_info = Cmi_format.read_cmi (OpamFilename.to_string file) in
       match cmi_info.Cmi_format.cmi_crcs with
-      | (name, _) as nd :: imports when name = cmi_info.Cmi_format.cmi_name ->
-          let name, digest = convert_name_digest nd in
-          let imports = List.map convert_name_digest imports in
+      | (name, Some digest) :: imports when
+              name = cmi_info.Cmi_format.cmi_name ->
+          let name = convert_name name in
+          let digest = convert_digest digest in
+          let imports = convert_imports imports in
           let unit = OpamUnit.create lib name digest in
             { s with units = OpamUnit.Set.add unit s.units;
                      unit_file = OpamUnit.Map.add unit file s.unit_file;
