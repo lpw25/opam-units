@@ -11,8 +11,11 @@ depends: [
   "ocamlfind"
   "assemblage"
 ]
+ocaml-version: [= "4.02.0+doc"]
 build: [
-  ["assembalge" "setup"]
+  ["assemblage" "setup" "--dumpast=false"]
   [make]
   [make "install"]
 ]
+remove: ["ocamlfind" "remove" "opam-units"]
+libraries: "opam-units"
