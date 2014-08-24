@@ -87,8 +87,8 @@ let print_package_import_graph t s name =
         "Package %s not installed"
         (OpamPackage.Name.to_string name)
 
-let opam_units global_options name_opt graph =
-  OpamArg.apply_global_options global_options;
+let opam_units name_opt graph =
+  OpamGlobals.root_dir := OpamGlobals.default_opam_dir;
   let t = OpamState.load_state "opam-units" in
   let s = OpamUnitsState.load_state t in
     match name_opt with
@@ -114,7 +114,7 @@ let graph =
 let opam_units =
   let doc = "Remove a package from the Opam digest database" in
   let info = Term.info ~doc "opam-units" in
-    (Term.(pure opam_units $OpamArg.global_options $package $graph), info)
+    (Term.(pure opam_units $package $graph), info)
 
 let () =
   try
