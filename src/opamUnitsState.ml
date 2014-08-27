@@ -33,7 +33,7 @@ let read_state file =
     try
       let magic_no = OpamUnitsConfig.cache_magic_number in
       let magic_len = String.length magic_no in
-      let buffer = String.create magic_len in
+      let buffer = Bytes.create magic_len in
       really_input ic buffer 0 magic_len;
       if buffer <> magic_no then begin
         close_in ic;
@@ -163,13 +163,14 @@ let install_time t pkg =
 
 (* Add the compilation units in a given package. *)
 let add_package t pkg s =
-  let opam = OpamState.opam t pkg in
   let lib_names =
-    OpamMisc.filter_map
-      (fun (s,filter) ->
-        if OpamState.eval_filter t ~opam OpamVariable.Map.empty filter
-        then Some s else None)
-      (OpamFile.OPAM.libraries opam)
+    match OpamState.repository_and_prefix_of_package t pkg with
+    | None -> []
+    | Some (repo, prefix) ->
+        let dir = OpamPath.Repository.packages repo prefix pkg in
+        let file = OpamFilename.OP.(dir // "findlib") in
+        let lines = OpamFile.Lines.safe_read file in
+          List.flatten lines
   in
   let libs =
     List.map
