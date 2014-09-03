@@ -8,6 +8,7 @@ depends: [
   "cmdliner"
   "opam-lib"
   "ocamlgraph"
+  "ocamlfind-units"
   "ocamlfind"
   "assemblage"
 ]

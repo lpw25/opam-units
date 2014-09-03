@@ -131,27 +131,21 @@ let add_cmi lib s file =
     warn_cmi_error file err;
     s
 
-(* Add the compilation units in a given directory. *)
-let add_directory lib s dir =
-  if not (OpamFilename.exists_dir dir) then begin
-    OpamGlobals.warning "Library directory %s is missing." (OpamFilename.prettify_dir dir);
-    s
-  end else begin
-    let files = OpamFilename.files dir in
-    let cmis =
-      List.filter (fun n -> OpamFilename.check_suffix n ".cmi") files
-    in
-      List.fold_left (add_cmi lib) s cmis
-  end
+let findlib_units_state = FindlibUnits.state ()
 
 (* Add the compilation units in a given library. *)
 let add_library s lib =
   let name = OpamLibrary.Name.to_string (OpamLibrary.name lib) in
   try
+    let units = FindlibUnits.of_package findlib_units_state name in
+    let s = FindlibUnits.Map.fold (fun _lib unit_map s ->
+      FindlibUnits.Map.fold (fun _unit_name { FindlibUnits.cmi } s ->
+        add_cmi lib s (OpamFilename.of_string cmi)
+      ) unit_map s
+    ) units s in
     let dir = OpamFilename.Dir.of_string (Findlib.package_directory name) in
-    let s = add_directory lib s dir in
-      { s with library_directory =
-                 OpamLibrary.Map.add lib dir s.library_directory }
+    { s with library_directory =
+        OpamLibrary.Map.add lib dir s.library_directory }
   with Findlib.No_such_package _ ->
     OpamGlobals.warning "Library %s is not installed." name;
     s
