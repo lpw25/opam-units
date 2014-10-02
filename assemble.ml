@@ -17,7 +17,13 @@
 open Assemblage
 
 (* OCamlfind packages *)
-let lib_pkgs = [pkg "opam-lib"; pkg "opam-lib.client"; pkg "compiler-libs.common"; pkg "ocamlgraph"; pkg "findlib"]
+let lib_pkgs = [
+  pkg "opam-lib";
+  pkg "opam-lib.client";
+  pkg "compiler-libs.common";
+  pkg "ocamlfind-units";
+  pkg "ocamlgraph";
+]
 let bin_pkgs = [pkg "cmdliner"]
 
 (* Compilation units *)
