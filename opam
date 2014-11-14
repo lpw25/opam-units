@@ -12,7 +12,7 @@ depends: [
   "ocamlfind"
   "assemblage"
 ]
-ocaml-version: [= "4.02.0+doc"]
+ocaml-version: [= "4.02.1+doc"]
 build: [
   ["assemblage" "setup" "--dumpast=false"]
   [make]
